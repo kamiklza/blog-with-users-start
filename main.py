@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, flash, request
+from flask import Flask, render_template, redirect, url_for, flash, request, abort
 from flask_bootstrap import Bootstrap
 from flask_ckeditor import CKEditor
 from datetime import date
@@ -8,6 +8,7 @@ from sqlalchemy.orm import relationship
 from flask_login import UserMixin, login_user, LoginManager, login_required, current_user, logout_user
 from forms import CreatePostForm, RegisterForm, LoginForm
 from flask_gravatar import Gravatar
+from functools import wraps
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
@@ -21,7 +22,6 @@ db = SQLAlchemy(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-
 
 
 ##CONFIGURE TABLES
@@ -49,10 +49,24 @@ class User(UserMixin, db.Model):
 def load_user(user_id):
     return User.query.get(user_id)
 
+def admin_only(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        if current_user.is_anonymous:
+            abort(404)
+        if current_user.id != 1:
+            abort(403)
+        else:
+            return function(*args, **kwargs)
+    return wrapper
+
+
+
 @app.route('/')
 def get_all_posts():
     posts = BlogPost.query.all()
     return render_template("index.html", all_posts=posts)
+
 
 
 @app.route('/register', methods=["GET", "POST"])
@@ -62,8 +76,8 @@ def register():
         email = register_form.email.data
         user = User.query.filter_by(email=email).first()
         if user:
-            flash("The email has already been registered. Please re-enter.")
-            return redirect(url_for('register'))
+            flash("The email has already been registered. Please login.")
+            return redirect(url_for('login'))
         else:
             password = generate_password_hash(register_form.password.data, method='pbkdf2:sha256', salt_length=8)
             name = register_form.name.data
@@ -83,10 +97,10 @@ def login():
         user = User.query.filter_by(email=email).first()
         password = login_form.password.data
         if not user:
-            flash("No user found in the database")
+            flash("The email does not exist, please try again.")
             return redirect(url_for('login', form=login_form))
         elif not check_password_hash(user.password, password):
-            flash("Password incorrect")
+            flash("Password incorrect, please try again")
             return redirect(url_for('login', form=login_form))
         else:
             login_user(user)
@@ -96,6 +110,7 @@ def login():
 
 @app.route('/logout')
 def logout():
+    logout_user()
     return redirect(url_for('get_all_posts'))
 
 
@@ -115,7 +130,8 @@ def contact():
     return render_template("contact.html")
 
 
-@app.route("/new-post")
+@app.route("/new-post", methods=["GET", "POST"])
+@admin_only
 def add_new_post():
     form = CreatePostForm()
     if form.validate_on_submit():
@@ -124,7 +140,7 @@ def add_new_post():
             subtitle=form.subtitle.data,
             body=form.body.data,
             img_url=form.img_url.data,
-            author=current_user,
+            author=current_user.name,
             date=date.today().strftime("%B %d, %Y")
         )
         db.session.add(new_post)
@@ -133,7 +149,8 @@ def add_new_post():
     return render_template("make-post.html", form=form)
 
 
-@app.route("/edit-post/<int:post_id>")
+@app.route("/edit-post/<int:post_id>", methods=["GET", "POST"])
+@admin_only
 def edit_post(post_id):
     post = BlogPost.query.get(post_id)
     edit_form = CreatePostForm(
@@ -147,15 +164,16 @@ def edit_post(post_id):
         post.title = edit_form.title.data
         post.subtitle = edit_form.subtitle.data
         post.img_url = edit_form.img_url.data
-        post.author = edit_form.author.data
+        post.author = post.author # Can be removed
         post.body = edit_form.body.data
         db.session.commit()
-        return redirect(url_for("show_post", post_id=post.id))
+        return redirect(url_for("show_post", post_id=post.id, is_edit=True))
 
     return render_template("make-post.html", form=edit_form)
 
 
 @app.route("/delete/<int:post_id>")
+
 def delete_post(post_id):
     post_to_delete = BlogPost.query.get(post_id)
     db.session.delete(post_to_delete)
