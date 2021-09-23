@@ -1,6 +1,8 @@
-{% include "header.html" %}
+
 {% import 'bootstrap/wtf.html' as wtf %}
 
+
+{% include "header.html" %}
   <!-- Page Header -->
   <header class="masthead" style="background-image: url('{{post.img_url}}')">
     <div class="overlay"></div>
@@ -33,19 +35,16 @@
             {% endif %}
 
 
-
 <!--           Comments Area -->
           <div class="col-lg-12 col-md-12 mx-auto comment">
-
-
-                  {{ ckeditor.load() }}
-                  {{ ckeditor.config(name='comment') }}
-                  {{ wtf.quick_form(form, novalidate=True, button_map={"submit": "primary"}) }}
-
+              {{ ckeditor.load() }}
+              {{ ckeditor.config(name='comment') }}
+              {{ wtf.quick_form(form, novalidate=True, button_map={"submit": "primary"}) }}
+            <br>
             {% if user_comments %}
               {%for comment in user_comments %}
             <div class="commenterImage">
-              <img src="https://pbs.twimg.com/profile_images/744849215675838464/IH0FNIXk.jpg"/>
+              <img src="{{ comment.author.email | gravatar }}">
             </div>
                 <div class="commentText">
                   <p>{{ comment.comment|safe }}</p>
@@ -65,3 +64,4 @@
 
   <hr>
 {% include "footer.html" %}
+

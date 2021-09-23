@@ -26,6 +26,14 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 
+gravatar = Gravatar(app,
+                    size=100,
+                    rating='g',
+                    default='retro',
+                    force_default=False,
+                    force_lower=False,
+                    use_ssl=False,
+                    base_url=None)
 
 
 #CONFIGURE TABLES
@@ -139,14 +147,17 @@ def logout():
 @app.route("/post/<int:post_id>", methods=["GET", "POST"])
 def show_post(post_id):
     requested_post = BlogPost.query.get(post_id)
-    comments = Comment.query.all()
+    comments = requested_post.comments
     comment_form = CommentForm()
     if comment_form.validate_on_submit():
-        print(comment_form.comment.data)
-        content = Comment(comment=comment_form.comment.data, post=requested_post, author=current_user)
-        db.session.add(content)
-        db.session.commit()
-        return redirect(url_for('show_post', post_id=post_id))
+        if current_user.is_authenticated:
+            content = Comment(comment=comment_form.comment.data, post=requested_post, author=current_user)
+            db.session.add(content)
+            db.session.commit()
+            return redirect(url_for('show_post', post_id=post_id))
+        else:
+            flash("You need to login or register to comment.")
+            return redirect(url_for('login'))
     return render_template("post.html", post=requested_post, form=comment_form, user_comments=comments)
 
 
