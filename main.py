@@ -36,6 +36,7 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(250), nullable=False)
     name = db.Column(db.String(250), nullable=False)
     posts = relationship('BlogPost', back_populates='author')
+    comments = relationship('Comment', back_populates='author')
 # db.create_all()
 
 class BlogPost(db.Model):
@@ -50,11 +51,20 @@ class BlogPost(db.Model):
     date = db.Column(db.String(250), nullable=False)
     body = db.Column(db.Text, nullable=False)
     img_url = db.Column(db.String(250), nullable=False)
+    comments = relationship('Comment', back_populates='post')
 
 # db.create_all()
 
 class Comment(db.Model):
     __tablename__ = "comments"
+    id = db.Column(db.Integer, primary_key=True)
+    comment = db.Column(db.String(500), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('blog_posts.id'))
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    post = relationship('BlogPost', back_populates='comments')
+    author = relationship('User', back_populates='comments')
+
+# db.create_all()
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -63,7 +73,7 @@ def load_user(user_id):
 def admin_only(function):
     @wraps(function)
     def wrapper(*args, **kwargs):
-        if current_user.id > 2:
+        if current_user.id != 1:
             abort(403)
         else:
             return function(*args, **kwargs)
@@ -74,6 +84,9 @@ def admin_only(function):
 @app.route('/')
 def get_all_posts():
     posts = BlogPost.query.all()
+    users = User.query.all()
+    for user in users:
+        print(user.comments)
     return render_template("index.html", all_posts=posts)
 
 
@@ -123,10 +136,18 @@ def logout():
     return redirect(url_for('get_all_posts'))
 
 
-@app.route("/post/<int:post_id>")
+@app.route("/post/<int:post_id>", methods=["GET", "POST"])
 def show_post(post_id):
     requested_post = BlogPost.query.get(post_id)
-    return render_template("post.html", post=requested_post)
+    comments = Comment.query.all()
+    comment_form = CommentForm()
+    if comment_form.validate_on_submit():
+        print(comment_form.comment.data)
+        content = Comment(comment=comment_form.comment.data, post=requested_post, author=current_user)
+        db.session.add(content)
+        db.session.commit()
+        return redirect(url_for('show_post', post_id=post_id))
+    return render_template("post.html", post=requested_post, form=comment_form, user_comments=comments)
 
 
 @app.route("/about")
