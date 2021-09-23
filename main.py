@@ -6,9 +6,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from flask_login import UserMixin, login_user, LoginManager, login_required, current_user, logout_user
-from forms import CreatePostForm, RegisterForm, LoginForm
+from forms import CreatePostForm, RegisterForm, LoginForm, CommentForm
 from flask_gravatar import Gravatar
 from functools import wraps
+
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
@@ -24,26 +26,35 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 
-##CONFIGURE TABLES
 
-class BlogPost(db.Model):
-    __tablename__ = "blog_posts"
-    id = db.Column(db.Integer, primary_key=True)
-    author = db.Column(db.String(250), nullable=False)
-    title = db.Column(db.String(250), unique=True, nullable=False)
-    subtitle = db.Column(db.String(250), nullable=False)
-    date = db.Column(db.String(250), nullable=False)
-    body = db.Column(db.Text, nullable=False)
-    img_url = db.Column(db.String(250), nullable=False)
-# db.create_all()
 
+#CONFIGURE TABLES
 class User(UserMixin, db.Model):
     __tablename__ = "user"
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(250), nullable=False)
     password = db.Column(db.String(250), nullable=False)
     name = db.Column(db.String(250), nullable=False)
+    posts = relationship('BlogPost', back_populates='author')
 # db.create_all()
+
+class BlogPost(db.Model):
+    __tablename__ = "blog_posts"
+    id = db.Column(db.Integer, primary_key=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    #author is an "invisible property to store the user object#
+    author = relationship('User', back_populates='posts')
+    # author = db.Column(db.String(250), nullable=False)
+    title = db.Column(db.String(250), unique=True, nullable=False)
+    subtitle = db.Column(db.String(250), nullable=False)
+    date = db.Column(db.String(250), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    img_url = db.Column(db.String(250), nullable=False)
+
+# db.create_all()
+
+class Comment(db.Model):
+    __tablename__ = "comments"
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -52,9 +63,7 @@ def load_user(user_id):
 def admin_only(function):
     @wraps(function)
     def wrapper(*args, **kwargs):
-        if current_user.is_anonymous:
-            abort(404)
-        if current_user.id != 1:
+        if current_user.id > 2:
             abort(403)
         else:
             return function(*args, **kwargs)
@@ -131,6 +140,7 @@ def contact():
 
 
 @app.route("/new-post", methods=["GET", "POST"])
+@login_required
 @admin_only
 def add_new_post():
     form = CreatePostForm()
@@ -140,8 +150,8 @@ def add_new_post():
             subtitle=form.subtitle.data,
             body=form.body.data,
             img_url=form.img_url.data,
-            author=current_user.name,
-            date=date.today().strftime("%B %d, %Y")
+            author=current_user,
+            date=date.today().strftime("%B %d, %Y"),
         )
         db.session.add(new_post)
         db.session.commit()
