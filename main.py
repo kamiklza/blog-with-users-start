@@ -93,9 +93,6 @@ def admin_only(function):
 @app.route('/')
 def get_all_posts():
     posts = BlogPost.query.all()
-    users = User.query.all()
-    for user in users:
-        print(user.comments)
     return render_template("index.html", all_posts=posts)
 
 
